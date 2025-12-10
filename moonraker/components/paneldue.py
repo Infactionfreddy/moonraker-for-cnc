@@ -660,33 +660,28 @@ class PanelDue:
         self.write_response(response)
 
     async def _run_paneldue_M30(self, arg_p: str = "") -> None:
-        # M30: Program End with Reset (CNC Standard)
-        # LinuxCNC/ISO Standard: End program and reset to beginning
-        # For CNC: Reset file position to 0 (ready for repeat)
-        # For 3D Print compatibility: Also support file deletion if path provided
+        # M30: Delete File (3D Print Standard - Marlin/RepRap)
+        # PanelDue compatibility: Delete file from SD card
+        # Note: For CNC program reset, use M2 RESTART instead
         
-        if arg_p and arg_p.strip():
-            # Legacy 3D Print behavior: Delete file if path specified
-            # This maintains backwards compatibility with existing PanelDue usage
-            path = arg_p.strip('\"')
-            if path.startswith("0:/"):
-                path = path[3:]
-            elif path[0] == "/":
-                path = path[1:]
+        if not arg_p or not arg_p.strip():
+            # No filename provided - do nothing (original Klipper behavior)
+            # CNC reset functionality moved to M2 RESTART
+            logging.debug("M30: No filename provided, ignoring")
+            return
+        
+        # Delete file if path specified
+        path = arg_p.strip('\"')
+        if path.startswith("0:/"):
+            path = path[3:]
+        elif path[0] == "/":
+            path = path[1:]
 
-            if not path.startswith("gcodes/"):
-                path = "gcodes/" + path
-            await self.file_manager.delete_file(path)
-        else:
-            # CNC Standard behavior: Reset file position for repeat
-            # This allows M30 in G-Code to trigger program restart
-            try:
-                # Send SDCARD_RESET_FILE to reset virtual_sdcard position to 0
-                await self.klippy_apis.run_gcode("SDCARD_RESET_FILE")
-                logging.info("M30: File position reset to beginning (CNC mode)")
-            except self.server.error as e:
-                logging.info(f"M30: Could not reset file position: {e}")
-                # Not an error - file might not be loaded
+        if not path.startswith("gcodes/"):
+            path = "gcodes/" + path
+        
+        await self.file_manager.delete_file(path)
+        logging.info(f"M30: File deleted: {path}")
 
     def _run_paneldue_M36(self, arg_p: Optional[str] = None) -> None:
         response: Dict[str, Any] = {}
